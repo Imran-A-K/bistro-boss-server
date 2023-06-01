@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -34,7 +35,10 @@ async function run() {
     const reviewCollection = client.db("BistroDb").collection("reviews");
     const cartCollection = client.db("BistroDb").collection("carts");
 
+    // jwt api
+
     
+
     // user related api's
 
     app.get('/users', async (req, res) => {
@@ -55,7 +59,7 @@ async function run() {
       res.send(result);
     })
 
-    app.patch('users/admin/:id', async(req, res) => {
+    app.patch('/users/admin/:id', async(req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) }
       const updateDoc = {
