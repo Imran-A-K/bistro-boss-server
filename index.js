@@ -65,10 +65,27 @@ async function run() {
       })
       res.send({ token });
     })
+    // Warning: use verifyJWT before using verifyAdmin
+    const verifyAdmin = async(req, res, next) => {
+      const email = req.decoded.email
+      const query = { email : email}
+      const user = await usersCollection.findOne(query)
+      if(user?.role !== 'admin'){
+        return res.status(403).send({error: true , message: 'forbidden message'})
+      }
+      next()
+    }
 
     // user related api's
 
-    app.get('/users', async (req, res) => {
+    /** APi secure only admin can access
+     * 1. Do not show secure links to those who should not see the links
+     * 2. use jwt token : verifyJWT
+     * 3. use verifyAdmin middleware
+     * 
+     * * */
+
+    app.get('/users',verifyJWT,verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
