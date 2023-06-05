@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config()
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
 
 const app = express()
 const port = process.env.PORT || 5000
@@ -90,7 +90,7 @@ async function run() {
       res.send(result);
     })
 
-    app.post('/users',verifyJWT,verifyAdmin, async(req, res) => {
+    app.post('/users',async(req, res) => {
       const user = req.body
       // console.log(user)
       const query = { email: user.email }
@@ -135,7 +135,7 @@ async function run() {
         res.send(result)
     })
 
-    app.post('/menu', async(req,res)=> {
+    app.post('/menu',verifyJWT,verifyAdmin, async(req,res)=> {
       const newItem = req.body
       const result = await menuCollection.insertOne(newItem)
       res.send(result)
@@ -183,6 +183,32 @@ async function run() {
       const result = await cartCollection.deleteOne(query)
       res.send(result);
     })
+
+    // create payment intent
+
+    app.post('/create-payment-intent', async (req, res) => {
+      const { price } = req.body;
+      const amount = price*100
+      const paymentIntent = await stripe.paymentIntent.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ['card']
+      })
+      res.send({clientSecret: paymentIntent.client_secret})
+    })
+     /**
+     * ---------------
+     * BANGLA SYSTEM(second best solution)
+     * ---------------
+     * 1. load all payments
+     * 2. for each payment, get the menuItems array
+     * 3. for each item in the menuItems array get the menuItem from the menu collection
+     * 4. put them in an array: allOrderedItems
+     * 5. separate allOrderedItems by category using filter
+     * 6. now get the quantity by using length: pizzas.length
+     * 7. for each category use reduce to get the total amount spent on this category
+     * 
+    */
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
