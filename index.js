@@ -49,7 +49,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
+    client.connect();
     
     const usersCollection = client.db("BistroDb").collection("users");
     const menuCollection = client.db("BistroDb").collection("menu");
@@ -189,7 +190,9 @@ async function run() {
 
     app.post('/create-payment-intent',verifyJWT, async (req, res) => {
       const { price } = req.body;
-      const amount = Math.round(price*100)
+      const amount = parseInt(price*100) 
+      //or
+      // const amount = Math.round(price*100)
       // console.log(price, amount)
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
@@ -234,9 +237,63 @@ async function run() {
 
       res.send({insertResult, deleteResult})
     })
-     /**
+    // admin -only api's
+    app.get('/admin-stats',verifyJWT,verifyAdmin, async(req, res) =>{
+      const users = await usersCollection.estimatedDocumentCount();
+      const products = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+
+      // best way to get sum of a field is to ue group and sum operator
+      /*
+      await paymentCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$price' }
+          }
+        }
+      ]).toArray((err, result) => {
+        if (err) {
+          console.error('Error executing aggregation:', err);
+          res.status(500).send('Error executing aggregation');
+          return;
+        }
+  
+        if (result.length === 0) {
+          res.status(404).send('No payments found');
+          return;
+        }
+  
+        const totalPrice = result[0].total;
+        res.json({ totalPrice });
+      });
+      */
+
+    /**
+     * Bangla system
+     */
+      const payments = await paymentCollection.find().toArray();
+      const revenue = payments.reduce((sum, payment)=> sum + payment.price,0)
+      // console.log({
+      //   users,
+      //   products,
+      //   orders,
+      //   revenue
+      // })
+      // console.log({users,
+      //   products,
+      //   orders,
+      //   revenue})
+      res.send({
+        users,
+        products,
+        orders,
+        revenue
+      })
+    })
+       /**
      * ---------------
-     * BANGLA SYSTEM(second best solution)
+     * BANGLA SYSTEM(second best solution) for loading revenue calculating payments
      * ---------------
      * 1. load all payments
      * 2. for each payment, get the menuItems array
@@ -247,6 +304,42 @@ async function run() {
      * 7. for each category use reduce to get the total amount spent on this category
      * 
     */
+    app.get('/order-stats', verifyJWT, verifyAdmin, async(req,res) =>{
+      const pipeline = [
+        {
+          $lookup: {
+            from: 'menu',
+            localField: 'menuItems',
+            foreignField: '_id',
+            as: 'menuItemsData'
+          }
+        },
+        {
+          $unwind: '$menuItemsData'
+        },
+        {
+          $group: {
+            _id: '$menuItemsData.category',
+            count: { $sum: 1 },
+            total: { $sum: '$menuItemsData.price' },
+
+          }
+        },
+        {
+          $project: {
+            category: '$_id',// this represents _id in group and these are not flexible
+            // you have to use specific mongodb predefined names
+            count: 1,
+            total: { $round: ['$total', 2] },
+            _id: 0
+          }
+        }
+      ];
+
+      const result = await paymentCollection.aggregate(pipeline).toArray()
+      res.send(result)
+
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
