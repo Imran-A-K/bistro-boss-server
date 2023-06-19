@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const nodemailer = require("nodemailer");
+
 
 const app = express()
 const port = process.env.PORT || 5000
@@ -24,6 +26,38 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+
+
+let transporter = nodemailer.createTransport({
+  host: 'smtp.sendgrid.net',
+  port: 587,
+  auth: {
+      user: "apikey",
+      pass: process.env.SENDGRID_API_KEY
+  }
+})
+
+// send payment confirmation email
+
+const sendPaymentConfirmationEmail =payment => {
+  transporter.sendMail({
+    from: "boss@bistro.com", // verified sender email
+    to: payment.email, // recipient email
+    subject: "Your order is confirmed. It will be delivered soon", // Subject line
+    text: "Hello world!", // plain text body
+    html: `
+    <div>
+    <h2>Payment Confirmed</h2>
+    </div>`, // html body
+  }, function(error, info){
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
+ 
+}
 
 // middleware jwt function it goes into the middle of jwt get api
 
@@ -234,6 +268,9 @@ async function run() {
       const insertResult = await paymentCollection.insertOne(payment)
       const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
       const deleteResult = await cartCollection.deleteMany(query)
+
+      // sending an email confirming payment
+      // sendPaymentConfirmationEmail(payment)
 
       res.send({insertResult, deleteResult})
     })
